@@ -6,8 +6,16 @@ Cluster extensions for [Sarama](https://github.com/Shopify/sarama), the Go clien
 
 ## Important
 
-The sarama API is unfortunately very unstable. We are trying to keep this library up-to-date with sarama's latest master
-and tag new releases with references to sarama's commit SHA1 they were tested against.
+The sarama API is unfortunately very unstable. We are trying to keep this library up-to-date with sarama's latest release
+and tag new releases accordingly.
+
+### This Technology Release
+
+This release refers to the stable, gopkg.in/Shopify/sarama release of Sarama, which is a stable API for Kafka 0.8.1
+and 0.8.2.
+
+This release also fixes the issue with expired partition offsets that fall outside the Kafka range.  This issue may
+occur when a server's disk fills, Mnemosyne goes offline, and Kafka messages expire without Mnemosyne being aware.
 
 ## Documentation
 

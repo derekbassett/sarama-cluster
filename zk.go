@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/samuel/go-zookeeper/zk"
+	"github.com/Shopify/sarama"
 )
 
 // ZK wraps a zookeeper connection
@@ -64,6 +65,7 @@ func (z *ZK) Claim(group, topic string, partitionID int32, id string) (err error
 			break
 		} else if err == zk.ErrNodeExists {
 			if tries++; tries > 20 {
+				sarama.Logger.Printf("Node %s already exists (%d)\n", node, tries)
 				return err
 			}
 			time.Sleep(100 * time.Millisecond)

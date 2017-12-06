@@ -1,0 +1,13 @@
+package: github.comcast.com/viper-ace/sarama-cluster
+import:
+- package: github.com/Shopify/sarama
+  version: ^1.14.0
+- package: github.com/samuel/go-zookeeper
+  subpackages:
+  - zk
+- package: gopkg.in/tomb.v2
+testImport:
+- package: github.com/onsi/ginkgo
+  version: ^1.4.0
+- package: github.com/onsi/gomega
+  version: ^1.2.0

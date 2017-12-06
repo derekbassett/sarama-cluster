@@ -159,6 +159,14 @@ var _ = Describe("Consumer", func() {
 		}).ShouldNot(BeEmpty())
 	})
 
+	It("should use default offset if requested", func() {
+		Expect(subject.latestOffset(topicPartition{tTopicA, 1})).To(Equal(sarama.OffsetOldest))
+
+		subject.Ack(&sarama.ConsumerMessage{Topic: tTopicA, Partition: 1, Offset: 17})
+		Expect(subject.Commit()).NotTo(HaveOccurred())
+		Expect(subject.latestOffset(topicPartition{tTopicA, 1})).To(Equal(int64(18)))
+	})
+
 	It("should auto-commit if requested", func() {
 		consumer, err := newConsumer(nil, &Config{AutoAck: true, CommitEvery: 10 * time.Millisecond})
 		Expect(err).NotTo(HaveOccurred())
@@ -184,7 +192,8 @@ var _ = Describe("Consumer", func() {
 		subject.Ack(&sarama.ConsumerMessage{Topic: tTopicA, Partition: 2, Offset: 15})
 		Expect(subject.Commit()).NotTo(HaveOccurred())
 
-		subject.Ack(&sarama.ConsumerMessage{Topic: tTopicA, Partition: 2, Offset: 0})
+		subject.Ack(&sarama.ConsumerMessage{Topic: tTopicA, Partition: 2, Offset: 16})
+		subject.Ack(&sarama.ConsumerMessage{Topic: tTopicA, Partition: 2, Offset: 12})
 		Expect(subject.Commit()).NotTo(HaveOccurred())
 
 		off1, err := subject.Offset(tTopicA, 1)
@@ -193,7 +202,7 @@ var _ = Describe("Consumer", func() {
 
 		off2, err := subject.Offset(tTopicA, 2)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(off2).To(Equal(int64(16)))
+		Expect(off2).To(Equal(int64(17)))
 	})
 
 	It("should allow to commit manually/periodically", func() {

@@ -45,6 +45,11 @@ type Config struct {
 	// Default: 1s
 	ZKSessionTimeout time.Duration
 
+	// RetryClaims tells the consumer to attempt to retrieve the offset
+	// and try again.
+	// Default: false
+	RetryClaim bool
+
 	customID     string
 	returnErrors bool
 }
@@ -162,6 +167,9 @@ func NewConsumerFromClient(client sarama.Client, zookeepers []string, group stri
 		return nil, err
 	}
 
+	// Sarama and Zookeeper libraries have compatible logger interfaces...
+	zoo.SetLogger(sarama.Logger)
+
 	// Initialize consumer
 	consumer := &Consumer{
 		id:     id,
@@ -229,7 +237,7 @@ func (c *Consumer) Offset(topic string, partitionID int32) (int64, error) {
 func (c *Consumer) Ack(msg *sarama.ConsumerMessage) {
 	tp := topicPartition{msg.Topic, msg.Partition}
 	c.aLock.Lock()
-	if msg.Offset > c.acked[tp] {
+	if msg.Offset >= c.acked[tp] {
 		c.acked[tp] = msg.Offset
 	}
 	c.aLock.Unlock()
@@ -424,7 +432,13 @@ func (c *Consumer) rebalance(claims claimsMap) (<-chan zk.Event, error) {
 		// Make new claims
 		for _, part := range partitions {
 			tp := topicPartition{topic, part.ID}
-			pcsm, err := c.claim(tp)
+			var pcsm sarama.PartitionConsumer
+			var err error
+			if c.config.RetryClaim {
+				pcsm, err = c.claim(tp)
+			} else {
+				pcsm, err = c.retryingClaim(tp)
+			}
 			if err != nil {
 				return nil, err
 			}
@@ -465,6 +479,25 @@ func (c *Consumer) reset(claims claimsMap) (err error) {
 	return
 }
 
+// latestOffset returns latest (or default) offset
+func (c *Consumer) latestOffset(tp topicPartition) (int64, error) {
+
+	offset, err := c.Offset(tp.topic, tp.partition)
+	if err != nil {
+		return 0, err
+	} else if offset < 1 {
+		offset = c.config.DefaultOffsetMode
+	}
+
+	c.rLock.Lock()
+	last, ok := c.read[tp]
+	c.rLock.Unlock()
+	if ok && offset < last {
+		offset = last
+	}
+	return offset, nil
+}
+
 // Claims a partition
 func (c *Consumer) claim(tp topicPartition) (sarama.PartitionConsumer, error) {
 	err := c.zoo.Claim(c.group, tp.topic, tp.partition, c.id)
@@ -486,8 +519,40 @@ func (c *Consumer) claim(tp topicPartition) (sarama.PartitionConsumer, error) {
 		offset = last
 	}
 
-	// fmt.Printf(">,%s,%s,%d\n", c.id, tp.String(), offset)
 	return c.consumer.ConsumePartition(tp.topic, tp.partition, offset)
+}
+
+// Claims a partition
+func (c *Consumer) retryingClaim(tp topicPartition) (sarama.PartitionConsumer, error) {
+	err := c.zoo.Claim(c.group, tp.topic, tp.partition, c.id)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Sometimes the offset is not set we want to get the latest offset
+	offset, err := c.latestOffset(tp)
+	if err != nil {
+		return nil, err
+	}
+
+	var consumer sarama.PartitionConsumer
+	for consumer == nil {
+		consumer, err = c.consumer.ConsumePartition(tp.topic, tp.partition, offset)
+		// If there is an error and it is ErrOffsetOutOfRange
+		// Get Offset from the client and set the current offset to that and try again.
+		if err != nil && err == sarama.ErrOffsetOutOfRange {
+			offset, err = c.client.GetOffset(tp.topic, tp.partition, c.config.DefaultOffsetMode)
+			if err == nil {
+				c.rLock.Lock()
+				c.read[tp] = offset
+				c.rLock.Unlock()
+			}
+		} else if err != nil {
+			return nil, err
+		}
+	}
+	return consumer, nil
 }
 
 // Registers consumer with zookeeper
