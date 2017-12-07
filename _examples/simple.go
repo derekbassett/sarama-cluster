@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/Shopify/sarama"
-	"github.comcast.com/viper-ace/sarama-cluster"
+	"github.com/bsm/sarama-cluster"
 )
 
 func main() {

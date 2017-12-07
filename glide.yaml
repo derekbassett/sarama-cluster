@@ -1,4 +1,4 @@
-package: github.comcast.com/viper-ace/sarama-cluster
+package: github.com/bsm/sarama-cluster
 import:
 - package: github.com/Shopify/sarama
   version: ^1.14.0
