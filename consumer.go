@@ -435,9 +435,9 @@ func (c *Consumer) rebalance(claims claimsMap) (<-chan zk.Event, error) {
 			var pcsm sarama.PartitionConsumer
 			var err error
 			if c.config.RetryClaim {
-				pcsm, err = c.claim(tp)
-			} else {
 				pcsm, err = c.retryingClaim(tp)
+			} else {
+				pcsm, err = c.claim(tp)
 			}
 			if err != nil {
 				return nil, err
